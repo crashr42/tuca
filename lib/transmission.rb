@@ -10,7 +10,7 @@ module Transmission
       @rpc = rpc
       @username = username
       @password = password
-      @x_transmission_session_id = nil
+      @session_id = nil
       @callbacks = {}
 
       @log = Logger.new(STDOUT)
@@ -279,13 +279,13 @@ module Transmission
     def push body, options = nil
       options = {:head => {}, :body => body.to_json}
       options[:head][:authorization] = [@username, @password] unless @username.nil? && @password.nil?
-      options[:head][:'x-transmission-session-id'] = @x_transmission_session_id unless @x_transmission_session_id.nil?
+      options[:head][:'x-transmission-session-id'] = @session_id unless @session_id.nil?
 
       request = EventMachine::HttpRequest.new(@rpc).post(options)      
       
       request.callback do
         if request.response_header.status == 409
-          @x_transmission_session_id = request.response_header['x-transmission-session-id']
+          @session_id = request.response_header['x-transmission-session-id']
           push(body) { |response| yield response }
         else
           yield Transmission::Response.new request.response_header.status, request.response
