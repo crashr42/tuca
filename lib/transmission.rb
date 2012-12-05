@@ -209,19 +209,21 @@ module Transmission
             torrents = result[:arguments][:torrents]
             if @torrents
               watch_torrents = {}
-              torrents.each do |t|
+              torrents.each do |t, i|
                 if @torrents.include?(t[:hashString])
                   wt = @torrents[t[:hashString]]
 
-                  safe_callback_call(:moved, t)      unless t[:downloadDir] == wt[:downloadDir]                   
-                  safe_callback_call(:progress, t)   unless t[:downloadedEver] == wt[:downloadedEver]
-                  safe_callback_call(:stopped, t)    if status_changed?(0, t, wt)
-                  safe_callback_call(:check_wait, t) if status_changed?(1, t, wt)
-                  safe_callback_call(:checked, t)    if status_changed?(2, t, wt)
-                  safe_callback_call(:start_wait, t) if status_changed?(3, t, wt)
-                  safe_callback_call(:started, t)    if status_changed?(4, t, wt)
-                  safe_callback_call(:seed_wait, t)  if status_changed?(5, t, wt)
-                  safe_callback_call(:seeded, t)     if status_changed?(6, t, wt)
+                  tc = Transmission::Torrent.new(t)
+
+                  safe_callback_call(:moved, tc)      unless t[:downloadDir] == wt[:downloadDir]                   
+                  safe_callback_call(:progress, tc)   unless t[:downloadedEver] == wt[:downloadedEver]
+                  safe_callback_call(:stopped, tc)    if status_changed?(0, t, wt)
+                  safe_callback_call(:check_wait, tc) if status_changed?(1, t, wt)
+                  safe_callback_call(:checked, tc)    if status_changed?(2, t, wt)
+                  safe_callback_call(:start_wait, tc) if status_changed?(3, t, wt)
+                  safe_callback_call(:started, tc)    if status_changed?(4, t, wt)
+                  safe_callback_call(:seed_wait, tc)  if status_changed?(5, t, wt)
+                  safe_callback_call(:seeded, tc)     if status_changed?(6, t, wt)
                   
                   watch_torrents[t[:hashString]] = t
                   @torrents.delete(t[:hashString])
@@ -237,7 +239,7 @@ module Transmission
               @torrents = {}
               torrents.each do |t| 
                 @torrents[t[:hashString]] = t
-                safe_callback_call(:exists, t)
+                safe_callback_call(:exists, Transmission::Torrent.new(t))
               end
             end
           end
@@ -251,7 +253,7 @@ module Transmission
 
     def safe_callback_call cb, *args
       return unless @callbacks
-      @callbacks[cb].call(args) if @callbacks.include?(cb)
+      @callbacks[cb].call(*args) if @callbacks.include?(cb)
     end
 
     def method_missing m, *args, &block
@@ -336,6 +338,31 @@ module Transmission
   end
 
   class Torrent
+    ATTRIBUTES = [
+      :activityDate, :addedDate, :announceResponse, :announceURL, :bandwidthPriority, :comment,
+      :corruptEver, :creator, :dateCreated, :desiredAvailable, :doneDate, :downloadDir,
+      :downloadedEver, :downloaders, :downloadLimit, :downloadLimited, :error, :errorString,
+      :eta, :files, :fileStats, :hashString, :haveUnchecked, :haveValid, :honorsSessionLimits,
+      :id, :isPrivate, :lastAnnounceTime, :lastScrapeTime, :leechers, :leftUntilDone,
+      :manualAnnounceTime, :maxConnectedPeers, :name, :nextAnnounceTime, :'peer-limit',
+      :peers, :peersConnected, :peersFrom, :peersGettingFromUs, :peersKnown, :peersSendingToUs, 
+      :percentDone, :pieces, :pieceCount, :pieceSize, :priorities, :rateDownload, :rateUpload, 
+      :recheckProgress, :scrateResponse, :scrapeURL, :seeders, :seedRatioLimit, :seedRatioMode,
+      :sizeWhenDone, :startDate, :status, :swarmSpeed, :timesCompleted, :trackers, :totalSize, 
+      :torrentFile, :uploadedEver, :uploadedLimit, :uploadedLimited, :uploadRatio, :wanted, 
+      :webseeds, :wedseedsSendingToUs
+    ]
+
+    STATUSES = {
+      0 => :stopped,
+      1 => :check_wait,
+      2 => :check,
+      3 => :download_wait,
+      4 => :download,
+      5 => :seed_wait,
+      6 => :seeded
+    }
+
     def initialize fields = {}
       @fields = fields
     end
@@ -345,7 +372,16 @@ module Transmission
     end
 
     def []= key, value
+      @log.debug(key)
       @fields[key] = value
+    end
+
+    def status
+      STATUSES[@fields[:status]]
+    end
+
+    def method_missing m, *args, &block
+      @fields[m]
     end
   end
 end
@@ -361,7 +397,7 @@ EventMachine.run do
     puts "New torrent: #{torrent.inspect}"
   end
   client.exists do |torrent|
-    puts "Exists torrent on transmission connection init: #{torrent.inspect}"
+    puts "Exists torrent on transmission connection init: #{torrent.status}"
   end
   client.deleted do |torrent|
     puts "Torrent was deleted: #{torrent.inspect}"
@@ -371,5 +407,5 @@ EventMachine.run do
   end
   client.started { |t| puts "Torrent started: #{t.inspect}" }
   client.seeded { |t| puts "Torrent seeded: #{t.inspect}" }
-  client.progress { |t| puts "Torrent #{t[0][:id]} progress: #{t[0][:downloadedEver]}" }
+  client.progress { |t| puts "Torrent #{t.id} progress: #{t.downloadedEver}" }
 end
