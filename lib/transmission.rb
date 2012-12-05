@@ -185,16 +185,73 @@ module Transmission
       json_request(body) { |response| yield response }
     end
 
-    %w(added deleted moved stopped removed started finished).each do |c|
-      name = "#{c}_callback".to_sym
+    %w(added deleted moved stopped start_wait started seed_wait seeded exists check_wait checked progress).each do |c|
+      name = c.to_sym
       define_method name do |&block|
         @callbacks[name] = block
         activate_callbacks(name)
       end
     end
 
+    def stop_callbacks
+      @callbacks_timer.cancel if @callbacks_timer
+    end
+
+    private
     def activate_callbacks activator
-      raise 'Implementation error'
+      return if @callbacks_timer
+      @callbacks_timer = EventMachine::PeriodicTimer.new(1) do
+        get([:id, :name, :hashString, :status, :downloadedEver]) do |response|
+          response.error { |result| raise :error } 
+          response.unauthorization { |result| raise :unauthorization }
+
+          response.success do |result|
+            torrents = result[:arguments][:torrents]
+            if @torrents
+              watch_torrents = {}
+              torrents.each do |t|
+                if @torrents.include?(t[:hashString])
+                  wt = @torrents[t[:hashString]]
+
+                  safe_callback_call(:moved, t)      unless t[:downloadDir] == wt[:downloadDir]                   
+                  safe_callback_call(:progress, t)   unless t[:downloadedEver] == wt[:downloadedEver]
+                  safe_callback_call(:stopped, t)    if status_changed?(0, t, wt)
+                  safe_callback_call(:check_wait, t) if status_changed?(1, t, wt)
+                  safe_callback_call(:checked, t)    if status_changed?(2, t, wt)
+                  safe_callback_call(:start_wait, t) if status_changed?(3, t, wt)
+                  safe_callback_call(:started, t)    if status_changed?(4, t, wt)
+                  safe_callback_call(:seed_wait, t)  if status_changed?(5, t, wt)
+                  safe_callback_call(:seeded, t)     if status_changed?(6, t, wt)
+                  
+                  watch_torrents[t[:hashString]] = t
+                  @torrents.delete(t[:hashString])
+                else
+                  watch_torrents[t[:hashString]] = t
+                  safe_callback_call(:added, t)
+                end
+              end
+              @torrents.each { |hash, t| safe_callback_call(:deleted, t) }
+
+              @torrents = watch_torrents
+            else
+              @torrents = {}
+              torrents.each do |t| 
+                @torrents[t[:hashString]] = t
+                safe_callback_call(:exists, t)
+              end
+            end
+          end
+        end
+      end
+    end
+
+    def status_changed? status_code, one_torrent, two_torrent
+      one_torrent[:status].to_i == status_code && two_torrent[:status].to_i != status_code
+    end
+
+    def safe_callback_call cb, *args
+      return unless @callbacks
+      @callbacks[cb].call(args) if @callbacks.include?(cb)
     end
 
     def method_missing m, *args, &block
@@ -203,7 +260,6 @@ module Transmission
       end
     end
     
-    private
     def json_request body
       push(body) do |response| 
         yield response
@@ -230,12 +286,12 @@ module Transmission
           @x_transmission_session_id = request.response_header['x-transmission-session-id']
           push(body) { |response| yield response }
         else
-          yield Response.new request.response_header.status, request.response
+          yield Transmission::Response.new request.response_header.status, request.response
         end
       end
 
       request.errback do |error|
-        yield Response.new request.response_header.status, request.response
+        yield Transmission::Response.new request.response_header.status, request.response
       end
     end
   end
@@ -266,7 +322,7 @@ module Transmission
 
     private
     def build_json
-      JSON.parse(@response)
+      JSON.parse(@response, :symbolize_names => true)
     end
 
     def can_build_json?
@@ -278,18 +334,42 @@ module Transmission
       end
     end
   end
+
+  class Torrent
+    def initialize fields = {}
+      @fields = fields
+    end
+    
+    def [] key
+      @fields[key]
+    end
+
+    def []= key, value
+      @fields[key] = value
+    end
+  end
 end
 
 EventMachine.run do
-  client = Transmission::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456'
-  client.get([:id, :name]) do |r|   
-    r.success { |result| puts :success }
+  client = Transmission::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456'  
+  client.get([:id, :name, :hashString, :status, :downloadedEver]) do |r|   
+    r.success { |result| puts result[:arguments][:torrents].map { |t| t[:downloadedEver] } }
     r.error { |result| puts :error }
     r.unauthorization { |result| puts :unauthorization }
   end
-  client.deleted_callback
-  client.get([:id]) do |result|
-    puts result
-    EventMachine.stop_event_loop
+  client.added do |torrent|
+    puts "New torrent: #{torrent.inspect}"
   end
+  client.exists do |torrent|
+    puts "Exists torrent on transmission connection init: #{torrent.inspect}"
+  end
+  client.deleted do |torrent|
+    puts "Torrent was deleted: #{torrent.inspect}"
+  end
+  client.stopped do |torrent|
+    puts "Torrent was stopped: #{torrent.inspect}"
+  end
+  client.started { |t| puts "Torrent started: #{t.inspect}" }
+  client.seeded { |t| puts "Torrent seeded: #{t.inspect}" }
+  client.progress { |t| puts "Torrent #{t[0][:id]} progress: #{t[0][:downloadedEver]}" }
 end
