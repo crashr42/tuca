@@ -312,13 +312,13 @@ module Transmission
 
     def error &block
       return unless block
-      block.call(@response) unless @code == 200 && can_build_json?
+      block.call(@code) if @code != 401 && @code != 200
       self      
     end
 
     def unauthorization &block
       return unless block
-      block.call(build_json) if @code == 401 && can_build_json?
+      block.call() if @code == 401
       self
     end
 
@@ -390,7 +390,7 @@ EventMachine.run do
   client = Transmission::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456'  
   client.get([:id, :name, :hashString, :status, :downloadedEver]) do |r|   
     r.success { |result| puts result[:arguments][:torrents].map { |t| t[:downloadedEver] } }
-    r.error { |result| puts :error }
+    r.error { |result| puts "#{result} fff" }
     r.unauthorization { |result| puts :unauthorization }
   end
   client.added do |torrent|
