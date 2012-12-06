@@ -12,6 +12,7 @@ module Transmission
       @password = password
       @session_id = nil
       @callbacks = {}
+      @connect = false
 
       @log = Logger.new(STDOUT)
     end
@@ -185,7 +186,7 @@ module Transmission
       json_request(body) { |response| yield response }
     end
 
-    %w(added deleted moved stopped start_wait started seed_wait seeded exists check_wait checked progress).each do |c|
+    %w(added deleted moved stopped start_wait started seed_wait seeded exists check_wait checked progress error unauthorization).each do |c|
       name = c.to_sym
       define_method name do |&block|
         @callbacks[name] = block
@@ -202,11 +203,10 @@ module Transmission
       return if @callbacks_timer
       @callbacks_timer = EventMachine::PeriodicTimer.new(1) do
         get([:id, :name, :hashString, :status, :downloadedEver]) do |response|
-          response.error { |result| raise :error } 
-          response.unauthorization { |result| raise :unauthorization }
+          response.error { |code| safe_callback_call(:error, code) } 
+          response.unauthorization { safe_callback_call(:unauthorization) }
 
-          response.success do |result|
-            torrents = result[:arguments][:torrents]
+          response.success(false) do |torrents|
             if @torrents
               watch_torrents = {}
               torrents.each do |t, i|
@@ -256,16 +256,8 @@ module Transmission
       @callbacks[cb].call(*args) if @callbacks.include?(cb)
     end
 
-    def method_missing m, *args, &block
-      if (m.to_s =~ /_callback$/)
-        puts "#{m} is callback"
-      end
-    end
-    
     def json_request body
-      push(body) do |response| 
-        yield response
-      end
+      push(body) { |response| yield response }
     end
 
     def format_id id
@@ -284,11 +276,12 @@ module Transmission
       request = EventMachine::HttpRequest.new(@rpc).post(options)      
       
       request.callback do
-        if request.response_header.status == 409
+        status = request.response_header.status
+        if status == 409
           @session_id = request.response_header['x-transmission-session-id']
           push(body) { |response| yield response }
         else
-          yield Transmission::Response.new request.response_header.status, request.response
+          yield Transmission::Response.new status, request.response
         end
       end
 
@@ -304,20 +297,33 @@ module Transmission
       @response = response
     end
 
-    def success &block
-      return unless block
-      block.call(build_json) if @code == 200 && can_build_json?
+    def success iterate = true, &block
+      return self unless block
+      return self unless @code == 200 || can_build_json?
+
+      response = build_json
+      if response.include?(:arguments) && response[:arguments].include?(:torrents)
+        if iterate
+          response[:arguments][:torrents].each { |t| yield Transmission::Torrent.new(t) }
+        else
+          torrents = []
+          response[:arguments][:torrents].each { |t| torrents << Transmission::Torrent.new(t) }          
+          block.call(torrents)
+        end
+      else
+        block.call(build_json)
+      end
       self
     end
 
     def error &block
-      return unless block
+      return self unless block
       block.call(@code) if @code != 401 && @code != 200
       self      
     end
 
     def unauthorization &block
-      return unless block
+      return self unless block
       block.call() if @code == 401
       self
     end
@@ -350,7 +356,7 @@ module Transmission
       :recheckProgress, :scrateResponse, :scrapeURL, :seeders, :seedRatioLimit, :seedRatioMode,
       :sizeWhenDone, :startDate, :status, :swarmSpeed, :timesCompleted, :trackers, :totalSize, 
       :torrentFile, :uploadedEver, :uploadedLimit, :uploadedLimited, :uploadRatio, :wanted, 
-      :webseeds, :wedseedsSendingToUs
+      :webseeds, :webseedsSendingToUs
     ]
 
     STATUSES = {
@@ -389,7 +395,7 @@ end
 EventMachine.run do
   client = Transmission::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456'  
   client.get([:id, :name, :hashString, :status, :downloadedEver]) do |r|   
-    r.success { |result| puts result[:arguments][:torrents].map { |t| t[:downloadedEver] } }
+    r.success { |result| puts "Downloaded ever: #{result.inspect}}" }
     r.error { |result| puts "#{result} fff" }
     r.unauthorization { |result| puts :unauthorization }
   end
@@ -408,4 +414,5 @@ EventMachine.run do
   client.started { |t| puts "Torrent started: #{t.inspect}" }
   client.seeded { |t| puts "Torrent seeded: #{t.inspect}" }
   client.progress { |t| puts "Torrent #{t.id} progress: #{t.downloadedEver}" }
+  client.error { |code| puts "Getting code: #{code}" }
 end
