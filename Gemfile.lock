@@ -34,7 +34,6 @@ PLATFORMS
 
 DEPENDENCIES
   autotest
-  bundler
   em-http-request
   json
   rspec
