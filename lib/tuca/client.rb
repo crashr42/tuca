@@ -11,7 +11,7 @@ module Tuca
 
     def session_set(arguments, &block)
       body = {
-          :method => 'session-set',
+          :method => :'session-set',
           :arguments => arguments
       }
 
@@ -20,7 +20,7 @@ module Tuca
 
     def session_get(&block)
       body = {
-          :method => 'session-get'
+          :method => :'session-get'
       }
 
       block_given? ? push(body, &block) : push(body)
@@ -28,7 +28,7 @@ module Tuca
 
     def blocklist_update(&block)
       body = {
-          :method => 'blocklist-update'
+          :method => :'blocklist-update'
       }
 
       block_given? ? push(body, &block) : push(body)
@@ -36,7 +36,7 @@ module Tuca
 
     def port_test(&block)
       body = {
-          :method => 'port-test'
+          :method => :'port-test'
       }
 
       block_given? ? push(body, &block) : push(body)
@@ -65,7 +65,7 @@ module Tuca
 
     def start(id, &block)
       body = {
-          :method => 'torrent-start',
+          :method => :'torrent-start',
           :arguments => {
               :ids => format_id(id)
           }
@@ -76,7 +76,7 @@ module Tuca
 
     def start_now(id, &block)
       body = {
-          :method => 'torrent-start-now',
+          :method => :'torrent-start-now',
           :arguments => {
               :ids => format_id(id)
           }
@@ -87,7 +87,7 @@ module Tuca
 
     def stop(id, &block)
       body = {
-          :method => 'torrent-stop',
+          :method => :'torrent-stop',
           :arguments => {
               :ids => format_id(id)
           }
@@ -98,7 +98,7 @@ module Tuca
 
     def verify(id, &block)
       body = {
-          :method => 'torrent-verify',
+          :method => :'torrent-verify',
           :arguments => {
               :ids => format_id(id)
           }
@@ -109,7 +109,7 @@ module Tuca
 
     def reannounce(id, &block)
       body = {
-          :method => 'torrent-reannounce',
+          :method => :'torrent-reannounce',
           :arguments => {
               :ids => format_id(id)
           }
@@ -120,7 +120,7 @@ module Tuca
 
     def set(id, property, value, &block)
       body = {
-          :method => 'torrent-set',
+          :method => :'torrent-set',
           :arguments => {
               :ids => format_id(id),
               property.to_sym => value
@@ -135,7 +135,7 @@ module Tuca
       arguments.delete(:filename) if arguments.key?(:metainfo) && arguments.key?(:filename)
 
       body = {
-          :method => 'torrent-add',
+          :method => :'torrent-add',
           :arguments => arguments
       }
 
@@ -144,7 +144,7 @@ module Tuca
 
     def delete(id = nil, delete_local_data = false, &block)
       body = {
-          :method => 'torrent-remove',
+          :method => :'torrent-remove',
           :arguments => {
               :delete_local_data => delete_local_data
           }
@@ -156,7 +156,7 @@ module Tuca
 
     def move(location, id = nil, move = true, &block)
       body = {
-          :method => 'torrent-set-location',
+          :method => :'torrent-set-location',
           :arguments => {
               :location => location
           }
