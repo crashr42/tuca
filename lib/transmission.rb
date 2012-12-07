@@ -3,7 +3,7 @@ require 'em-http-request'
 
 module Transmission
   class Client
-    def initialize rpc, username, password
+    def initialize(rpc, username, password)
       @rpc = rpc
       @username = username
       @password = password
@@ -11,7 +11,7 @@ module Transmission
       @callbacks = {}
     end
 
-    def session_set arguments
+    def session_set(arguments)
       body = {
         :method => 'session-set',
         :arguments => arguments
@@ -52,7 +52,7 @@ module Transmission
       push(body) { |response| yield response }
     end   
 
-    def get fields, id = nil
+    def get(fields, id = nil)
       body = {
           :method => :'torrent-get',
           :arguments => {
@@ -64,7 +64,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def start id
+    def start(id)
       body = {
           :method => 'torrent-start',
           :arguments => {
@@ -75,7 +75,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def start_now id
+    def start_now(id)
       body = {
           :method => 'torrent-start-now',
           :arguments => {
@@ -86,7 +86,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def stop id
+    def stop(id)
       body = {
           :method => 'torrent-stop',
           :arguments => {
@@ -97,7 +97,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def verify id
+    def verify(id)
       body = {
           :method => 'torrent-verify',
           :arguments => {
@@ -108,7 +108,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def reannounce id
+    def reannounce(id)
       body = {
           :method => 'torrent-reannounce',
           :arguments => {
@@ -119,7 +119,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def set id, property, value
+    def set(id, property, value)
       body = {
         :method => 'torrent-set',
         :arguments => {
@@ -131,9 +131,9 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def create arguments
-      raise "Undefined filename or metainfo" unless arguments.include?(:filename) || arguments.include?(:metainfo)
-      arguments.delete(:filename) if arguments.include?(:metainfo) && arguments.include?(:filename)
+    def create(arguments)
+      raise "Undefined filename or metainfo" unless arguments.key?(:filename) || arguments.key?(:metainfo)
+      arguments.delete(:filename) if arguments.key?(:metainfo) && arguments.key?(:filename)
 
       body = {
         :method => 'torrent-add',
@@ -143,7 +143,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def delete id = nil, delete_local_data = false
+    def delete(id = nil, delete_local_data = false)
       body = {
         :method => 'torrent-remove',
         :arguments => {
@@ -155,7 +155,7 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    def move location, id = nil, move = true
+    def move(location, id = nil, move = true)
       body = {
         :method => 'torrent-set-location',
         :arguments => {
@@ -168,11 +168,11 @@ module Transmission
       push(body) { |response| yield response }
     end
 
-    %w(added deleted moved stopped start_wait started seed_wait seeded exists check_wait checked progress error unauthorization).each do |c|
+    %w(added deleted moved stopped start_wait started seed_wait seeded exists check_wait checked progress error unauthorized).each do |c|
       name = c.to_sym
       define_method name do |&block|
         @callbacks[name] = block
-        activate_callbacks(name)
+        activate_callbacks
       end
     end
 
@@ -181,18 +181,18 @@ module Transmission
     end
 
     private
-    def activate_callbacks activator
+    def activate_callbacks
       return if @callbacks_timer
       @callbacks_timer = EventMachine::PeriodicTimer.new(1) do
         get([:id, :name, :hashString, :status, :downloadedEver]) do |response|
           response.error { |code| safe_callback_call(:error, code) } 
-          response.unauthorization { safe_callback_call(:unauthorization) }
+          response.unauthorized { safe_callback_call(:unauthorized) }
 
           response.success(false) do |torrents|
             if @torrents
               watch_torrents = {}
-              torrents.each do |t, i|
-                if @torrents.include?(t[:hashString])
+              torrents.each do |t|
+                if @torrents.key?(t[:hashString])
                   wt = @torrents[t[:hashString]]
 
                   tc = Transmission::Torrent.new(self, t)
@@ -214,7 +214,7 @@ module Transmission
                   safe_callback_call(:added, t)
                 end
               end
-              @torrents.each { |hash, t| safe_callback_call(:deleted, t) }
+              @torrents.each { |t| safe_callback_call(:deleted, t) }
 
               @torrents = watch_torrents
             else
@@ -229,16 +229,16 @@ module Transmission
       end
     end
 
-    def status_changed? status_code, one_torrent, two_torrent
+    def status_changed?(status_code, one_torrent, two_torrent)
       one_torrent[:status].to_i == status_code && two_torrent[:status].to_i != status_code
     end
 
-    def safe_callback_call cb, *args
+    def safe_callback_call(cb, *args)
       return unless @callbacks
-      @callbacks[cb].call(*args) if @callbacks.include?(cb)
+      @callbacks[cb].call(*args) if @callbacks.key?(cb)
     end
 
-    def format_id id
+    def format_id(id)
       case id
         when Hash then id.to_a
         when Array then id
@@ -246,7 +246,7 @@ module Transmission
       end
     end
 
-    def push body, options = nil
+    def push(body)
       options = {:head => {}, :body => body.to_json}
       options[:head][:authorization] = [@username, @password] unless @username.nil? && @password.nil?
       options[:head][:'x-transmission-session-id'] = @session_id unless @session_id.nil?
@@ -259,8 +259,8 @@ module Transmission
           @session_id = request.response_header['x-transmission-session-id']
           push(body) { |response| yield response }
         else
-          safe_callback_call(:error, status) unless [200, 401].include?(status)
-          safe_callback_call(:unauthorization) if status == 401
+          safe_callback_call(:error, status) unless [200, 401].key?(status)
+          safe_callback_call(:unauthorized) if status == 401
           yield Transmission::Response.new(self, status, request.response)
         end
       end
@@ -274,44 +274,60 @@ module Transmission
 
   # TODO: добавить колбеки для успешно выполненных запросов по полю {result:}
   class Response
-    def initialize connection, code, response
+    def initialize(connection, code, response)
       @connection = connection
       @code = code
       @response = response
+      @can_build = can_build_json?
+      @json = build_json if @can_build
+      @result = @json[:result] if @json
     end
 
-    def success iterate = true, &block
+    def success(iterate = true, &block)
       return self unless block_given?
-      return self unless @code == 200 || can_build_json?
+      return self unless @code == 200 || @can_build
+      return self unless success?
 
-      response = build_json
-      if response.include?(:arguments) && response[:arguments].include?(:torrents)
+      if torrents_response?
         if iterate
-          response[:arguments][:torrents].each { |t| yield Transmission::Torrent.new(@connection, t) }
+          torrents.each { |t| yield Transmission::Torrent.new(@connection, t) }
         else
-          torrents = []
-          response[:arguments][:torrents].each { |t| torrents << Transmission::Torrent.new(@connection, t) }          
-          block.call(torrents)
+          ts = []
+          torrents.each { |t| ts << Transmission::Torrent.new(@connection, t) }
+          block.call(ts)
         end
       else
-        block.call(build_json)
+        block.call(@json)
       end
       self
     end
 
-    def error &block
+    def error(&block)
       return self unless block
-      block.call(@code) if @code != 401 && @code != 200
+      block.call(@code, '') if @code != 401 && @code != 200
+      block.call(@code, @result) if @can_build && !success?
       self      
     end
 
-    def unauthorization &block
+    def unauthorized(&block)
       return self unless block
       block.call() if @code == 401
       self
     end
 
+    def success?
+      @result && @result == 'success'
+    end
+
     private
+    def torrents
+      @json[:arguments][:torrents]
+    end
+
+    def torrents_response?
+      @json && @json.key?(:arguments) && @json.key?(:torrents)
+    end
+
     def build_json
       JSON.parse(@response, :symbolize_names => true)
     end
@@ -358,17 +374,17 @@ module Transmission
       6 => :seeded
     }
 
-    def initialize connection, fields = {}
+    def initialize(connection, fields = {})
       @connection = connection
       @fields = fields
     end
     
-    def [] key
+    def [](key)
       @fields[key]
     end
 
-    def []= key, value
-      raise "Attribute #{key} is readonly" unless SETTABLE.include?(key)
+    def []=(key, value)
+      raise "Attribute #{key} is readonly" unless SETTABLE.key?(key)
       @fields[key] = value
       update_attribute(key, value)
     end
@@ -379,9 +395,11 @@ module Transmission
 
     def save
       if new_torrent?
-        saved_attributes = @fields.select { |key, value| SETTABLE.include?(key) || [:filename, :metainfo].include?(key) }        
-        result = @connection.create(saved_attributes)
-        @fields.merge(result[:arguments])
+        saved_attributes = @fields.select { |key, value| SETTABLE.key?(key) || [:filename, :metainfo].key?(key) }
+        @connection.create(saved_attributes) do |r|
+          r.success { |result| @fields.merge(result[:arguments][:'torrent-added']) }
+          r.error { nil }
+        end
       end
       self
     end
@@ -398,53 +416,55 @@ module Transmission
       @connection.stop(@fields[:id]) unless new_torrent?
     end
 
-    def delete delete_local_data = false
+    def delete(delete_local_data = false)
       @connection.delete(@fields[:id], delete_local_data) unless new_torrent?
     end
 
-    def move location, move = true
+    def move(location, move = true)
       @connection.move(location, @fields[:id], move)
     end
 
     def new_torrent?
-      !@fields.include?(:id) || @fields[:id].to_i < 0
+      !@fields.key?(:id) || @fields[:id].to_i < 0
     end
 
     private
-    def method_missing m, *args, &block
+    def method_missing(m, *args, &block)
       @fields[m]
+      @block = block
+      @args = args
     end
 
-    def update_attribute key, value
+    def update_attribute(key, value)
       @connection.set(@fields[:id], key, value) unless new_torrent?
     end
   end
 end
 
 EventMachine.run do
-  client = Transmission::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456'  
+  client = Transmission::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '1234526'
   client.get([:id, :name, :hashString, :status, :downloadedEver]) do |r|   
-    r.success { |result| puts "Downloaded ever: #{result.inspect}}" }
-    r.error { |result| puts "#{result} fff" }
-    r.unauthorization { |result| puts :unauthorization }
+    r.success { |result| puts "Status (#{result.id}): #{result.status}}" }
+    r.error { |code, message| puts "Error (#{code}) #{message}" }
+    r.unauthorized { puts :unauthorized }
   end
   client.added do |torrent|
-    puts "New torrent: #{torrent.inspect}"
+    puts "New torrent: #{torrent.id}"
   end
   client.exists do |torrent|
     puts "Exists torrent on transmission connection init: #{torrent.status}"
   end
   client.deleted do |torrent|
-    puts "Torrent was deleted: #{torrent.inspect}"
+    puts "Torrent was deleted: #{torrent.id}"
   end
   client.stopped do |torrent|
-    puts "Torrent was stopped: #{torrent.inspect}"
+    puts "Torrent was stopped: #{torrent.id}"
   end
   client.started { |t| puts "Torrent started: #{t.inspect}" }
   client.seeded { |t| puts "Torrent seeded: #{t.inspect}" }
   client.progress { |t| puts "Torrent #{t.id} progress: #{t.downloadedEver}" }
   client.error { |code| puts "Getting code: #{code}" }
-  client.unauthorization { puts "Unauthorization" }
+  client.unauthorized { puts "unauthorized" }
   client.create({:filename => '/home/nikita/Downloads/[rutracker.org].t3498008.torrent'}) do |r| 
     r.success { |r| puts r }
     r.error { |code| puts code }
