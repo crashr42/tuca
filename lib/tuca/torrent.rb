@@ -52,7 +52,7 @@ module Tuca
 
     def save(&block)
       if new_torrent?
-        saved_attributes = @fields.select { |key, value| SETTABLE.include?(key) || [:filename, :metainfo].include?(key) }
+        saved_attributes = @fields.select { |key| SETTABLE.include?(key) || [:filename, :metainfo].include?(key) }
         result = @connection.create(saved_attributes)
         @fields.merge(result[:arguments][:'torrent-added']) if result.success?
         block.call(result)

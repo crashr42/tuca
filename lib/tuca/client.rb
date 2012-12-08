@@ -213,7 +213,7 @@ module Tuca
                   safe_callback_call(:added, t)
                 end
               end
-              @torrents.each { |hash, t| safe_callback_call(:deleted, Tuca::Torrent.new(self, t)) }
+              @torrents.each { |_, t| safe_callback_call(:deleted, Tuca::Torrent.new(self, t)) }
 
               @torrents = watch_torrents
             else
