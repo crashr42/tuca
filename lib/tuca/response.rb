@@ -46,6 +46,11 @@ module Tuca
       self
     end
 
+    def end(&block)
+      block.call() if block_given?
+      self
+    end
+
     def duplicate?
       @result && @result == 'duplicate torrent'
     end
