@@ -32,7 +32,7 @@ module Tuca
     end
 
     def unknown(&block)
-      block.call() if block_given? && error? && !duplicate? && !corrupt? && !unauthorized?
+      block.call() if block_given? && unknown?
       self
     end
 
@@ -74,6 +74,10 @@ module Tuca
 
     def corrupt?
       @result && @result == 'invalid or corrupt torrent file'
+    end
+
+    def unknown?
+      error? && !duplicate? && !corrupt? && !unauthorized?
     end
 
     private
