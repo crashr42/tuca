@@ -27,7 +27,7 @@ module Tuca
     end
 
     def error(&block)
-      block.call(@code, @result) if !duplicate? && block_given? && error?
+      block.call(@code, @result) if block_given? && error?
       self
     end
 
