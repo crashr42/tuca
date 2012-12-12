@@ -31,6 +31,7 @@ EventMachine.run do
     r.success { |result| puts result }
     r.error { |code, message| puts "Error (#{code}) #{message}" }
     r.duplicate { puts "Torrent duplicate" }
+    r.corrupt { puts 'File corrupt!!!' }
   end
   response = client.create({:filename => '/home/nikita/Downloads/[rutracker.org].t3498008.torrent'})
   response.success { |result| puts "#{result} ---" }

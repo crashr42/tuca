@@ -40,13 +40,18 @@ module Tuca
       block.call() if block_given? && duplicate?
       self
     end
+  
+    def corrupt(&block)
+      block.call() if block_given? && corrupt?
+      self
+    end
 
     def duplicate?
       @result && @result == 'duplicate torrent'
     end
 
     def success?
-      [200, 401].include?(@code) && !duplicate?
+      @code == 200 && !duplicate? && !corrupt?
     end
 
     def error?
@@ -55,6 +60,10 @@ module Tuca
 
     def unauthorized?
       @code == 401
+    end
+
+    def corrupt?
+      @result && @result == 'invalid or corrupt torrent file'
     end
 
     private
