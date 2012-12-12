@@ -31,6 +31,11 @@ module Tuca
       self
     end
 
+    def unknown(&block)
+      block.call() if block_given? && error? && !duplicate? && !corrupt? && !unauthorized?
+      self
+    end
+
     def unauthorized(&block)
       block.call() if unauthorized? && block_given?
       self
