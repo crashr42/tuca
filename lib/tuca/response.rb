@@ -2,9 +2,9 @@ module Tuca
   class Response
     def initialize(connection, code, response)
       @connection = connection
-      @code = code
-      @response = response
-      @can_build = can_build_json?
+      @code       = code
+      @response   = response
+      @can_build  = can_build_json?
       @json = build_json if @can_build
       @result = @json[:result] if @json
     end
@@ -14,11 +14,9 @@ module Tuca
 
       if torrents_response?
         if iterate
-          torrents.each { |t| yield Tuca::Torrent.new(@connection, t) }
+          torrents.each { |t| yield register_torrent_if_necessary(t) }
         else
-          ts = []
-          torrents.each { |t| ts << Tuca::Torrent.new(@connection, t) }
-          block.call(ts)
+          block.call(torrents.map { |t| register_torrent_if_necessary(t) })
         end
       else
         block.call(@json)
@@ -45,7 +43,7 @@ module Tuca
       block.call() if block_given? && duplicate?
       self
     end
-  
+
     def corrupt(&block)
       block.call() if block_given? && corrupt?
       self
@@ -81,12 +79,20 @@ module Tuca
     end
 
     private
+    def register_torrent_if_necessary(torrent)
+      if @connection.torrents.include?(torrent[:hashString])
+        @connection.torrents[torrent[:hashString]]
+      else
+        @connection.torrents.store(torrent[:hashString], Tuca::Torrent.new(@connection, torrent))
+      end
+    end
+
     def torrents
-      @json[:arguments][:torrents]
+      @json[:arguments][:torrents] || [@json[:arguments][:'torrent-added']]
     end
 
     def torrents_response?
-      @json && @json.key?(:arguments) && @json[:arguments].key?(:torrents)
+      @json && @json.key?(:arguments) && (@json[:arguments].key?(:torrents) || @json[:arguments].key?(:"torrent-added"))
     end
 
     def build_json

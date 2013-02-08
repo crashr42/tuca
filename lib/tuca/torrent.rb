@@ -31,6 +31,25 @@ module Tuca
         6 => :seeded
     }
 
+    STATUSES.each do |name|
+      define_method "#{name}?".to_sym do |&block|
+        STATUSES[@fields[:status]] == name
+      end
+    end
+
+    ATTRIBUTES.each do |name|
+      define_method name.underscore do |&block|
+        @fields[name]
+      end
+    end
+
+    SETTABLE.each do |name|
+      define_method "#{name.underscore}=".to_sym do |value, &bloc|
+        update_attribute(name, value)
+        @fields[name] = value
+      end
+    end
+
     def initialize(connection, fields = {})
       @connection = connection
       @fields = fields
@@ -42,8 +61,8 @@ module Tuca
 
     def []=(key, value)
       raise "Attribute #{key} is readonly" unless SETTABLE.include?(key)
-      @fields[key] = value
       update_attribute(key, value)
+      @fields[key] = value
     end
 
     def status
@@ -61,31 +80,31 @@ module Tuca
 
     def start(&block)
       unless new_torrent?
-        block_given? ? @connection.start(@fields[:id], &block) : @connection.start(@fields[:id])
+        @connection.start(@fields[:id], &block)
       end
     end
 
     def start_now(&block)
       unless new_torrent?
-        block_given? ? @connection.start_now(@fields[:id], &block) : @connection.start_now(@fields[:id])
+        @connection.start_now(@fields[:id], &block)
       end
     end
 
     def stop(&block)
       unless new_torrent?
-        block_given? ? @connection.stop(@fields[:id], &block) : @connection.stop(@fields[:id])
+        @connection.stop(@fields[:id], &block)
       end
     end
 
     def delete(delete_local_data = false, &block)
       unless new_torrent?
-        block_given? ? @connection.delete(@fields[:id], delete_local_data, &block) : @connection.delete(@fields[:id], delete_local_data)
+        @connection.delete(@fields[:id], delete_local_data, &block)
       end
     end
 
     def move(location, move = true, &block)
       unless new_torrent?
-        block_given? ? @connection.move(location, @fields[:id], move, &block) : @connection.move(location, @fields[:id], move)
+        @connection.move(location, @fields[:id], move, &block)
       end
     end
 
@@ -94,10 +113,6 @@ module Tuca
     end
 
     private
-    def method_missing(m, *args, &block)
-      @fields[m]
-    end
-
     def update_attribute(key, value)
       @connection.set(@fields[:id], key, value) unless new_torrent?
     end
