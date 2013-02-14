@@ -122,7 +122,7 @@ module Tuca
     end
 
     def create(arguments, &block)
-      raise "Undefined filename or metainfo" unless arguments.key?(:filename) || arguments.key?(:metainfo)
+      raise 'Undefined filename or metainfo' unless arguments.key?(:filename) || arguments.key?(:metainfo)
       arguments.delete(:filename) if arguments.key?(:metainfo) && arguments.key?(:filename)
 
       body = {

@@ -1,22 +1,23 @@
 module Tuca
   class Client
+    # Transmission RPC methods
     include Tuca::Methods
 
     attr_reader :torrents
 
     def initialize(rpc, username, password, &block)
-      @options         = {
-          :uri        => URI.parse(rpc),
-          :rpc        => rpc,
-          :username   => username,
-          :password   => password,
+      @options = {
+          :uri => URI.parse(rpc),
+          :rpc => rpc,
+          :username => username,
+          :password => password,
           :session_id => nil
       }
       @reactor_running = EventMachine.reactor_running?
-      @fresh           = true
-      @callbacks       = {}
-      @block           = block
-      @torrents        = {}
+      @fresh = true
+      @callbacks = {}
+      @block = block
+      @torrents = {}
       if block_given?
         if @reactor_running
           @block.call(self)
@@ -59,37 +60,38 @@ module Tuca
     def activate_callbacks
       return if @callbacks_timer
       @callbacks_timer = EventMachine::PeriodicTimer.new(1) do
-        get([:id, :name, :hashString, :status, :downloadedEver]) do |response|
+        get(Tuca::Torrent::ATTRIBUTES) do |response|
           response.error { |code| safe_callback_call(:error, code) }
           response.unauthorized { safe_callback_call(:unauthorized) }
 
           response.success(false) do |torrents|
             if @fresh
-              torrents.each { |t| safe_callback_call(:exists, @torrents[t[:hashString]]) }
+              torrents.each do |t|
+                @torrents[t.hash_string] = t
+                safe_callback_call(:exists, t)
+              end
               @fresh = false
             else
               watch_torrents = {}
               torrents.each do |t|
-                tc = Tuca::Torrent.new(self, t)
+                if @torrents.key?(t.hash_string)
+                  wt = @torrents[t.hash_string]
 
-                if @torrents.key?(t[:hashString])
-                  wt = @torrents[t[:hashString]]
+                  safe_callback_call(:moved, t) unless t.download_dir == wt.download_dir
+                  safe_callback_call(:progress, t) unless t.downloaded_ever == wt.downloaded_ever
+                  safe_callback_call(:stopped, t) if status_changed?(0, t, wt)
+                  safe_callback_call(:check_wait, t) if status_changed?(1, t, wt)
+                  safe_callback_call(:checked, t) if status_changed?(2, t, wt)
+                  safe_callback_call(:start_wait, t) if status_changed?(3, t, wt)
+                  safe_callback_call(:started, t) if status_changed?(4, t, wt)
+                  safe_callback_call(:seed_wait, t) if status_changed?(5, t, wt)
+                  safe_callback_call(:seeded, t) if status_changed?(6, t, wt)
 
-                  safe_callback_call(:moved, tc) unless t[:downloadDir] == wt[:downloadDir]
-                  safe_callback_call(:progress, tc) unless t[:downloadedEver] == wt[:downloadedEver]
-                  safe_callback_call(:stopped, tc) if status_changed?(0, t, wt)
-                  safe_callback_call(:check_wait, tc) if status_changed?(1, t, wt)
-                  safe_callback_call(:checked, tc) if status_changed?(2, t, wt)
-                  safe_callback_call(:start_wait, tc) if status_changed?(3, t, wt)
-                  safe_callback_call(:started, tc) if status_changed?(4, t, wt)
-                  safe_callback_call(:seed_wait, tc) if status_changed?(5, t, wt)
-                  safe_callback_call(:seeded, tc) if status_changed?(6, t, wt)
-
-                  watch_torrents[t[:hashString]] = tc
-                  @torrents.delete(t[:hashString])
+                  watch_torrents[t.hash_string] = t
+                  @torrents.delete(t.hash_string)
                 else
-                  watch_torrents[t[:hashString]] = tc
-                  safe_callback_call(:added, tc)
+                  watch_torrents[t.hash_string] = t
+                  safe_callback_call(:added, t)
                 end
               end
               @torrents.each { |_, t| safe_callback_call(:deleted, t) }
@@ -130,17 +132,17 @@ module Tuca
     end
 
     def sync_request(body)
-      response = Net::HTTP.start(@options.uri.host, @options.uri.port, :use_ssl => @options.uri.scheme == 'https') do |http|
-        request      = Net::HTTP::Post.new(@options.uri.path)
+      response = Net::HTTP.start(@options[:uri].host, @options[:uri].port, :use_ssl => @options[:uri].scheme == 'https') do |http|
+        request = Net::HTTP::Post.new(@options[:uri].path)
         request.body = body.to_json
-        request.basic_auth(@options.username, @options.password) unless @options.username.nil? && @options.password.nil?
-        request['x-transmission-session-id'] = @options.session_id unless @options.session_id.nil?
+        request.basic_auth(@options[:username], @options[:password]) unless @options[:username].nil? && @options[:password].nil?
+        request['x-transmission-session-id'] = @options[:session_id] unless @options[:session_id].nil?
         http.request(request)
       end
 
       status = response.code.to_i
       if status == 409
-        @options.session_id = response.header['x-transmission-session-id']
+        @options[:session_id] = response.header['x-transmission-session-id']
         push(body)
       else
         safe_callback_call(:error, status) unless [200, 401].include?(status)
@@ -151,15 +153,15 @@ module Tuca
 
     def async_request(body, &block)
       options = {:head => {}, :body => body.to_json}
-      options[:head][:authorization] = [@options.username, @options.password] unless @options.username.nil? && @options.password.nil?
-      options[:head][:'x-transmission-session-id'] = @options.session_id unless @options.session_id.nil?
+      options[:head][:authorization] = [@options[:username], @options[:password]] unless @options[:username].nil? && @options[:password].nil?
+      options[:head][:'x-transmission-session-id'] = @options[:session_id] unless @options[:session_id].nil?
 
-      request = EventMachine::HttpRequest.new(@options.rpc).post(options)
+      request = EventMachine::HttpRequest.new(@options[:rpc]).post(options)
 
       request.callback do
         status = request.response_header.status
         if status == 409
-          @options.session_id = request.response_header['x-transmission-session-id']
+          @options[:session_id] = request.response_header['x-transmission-session-id']
           push(body, &block)
         else
           safe_callback_call(:error, status) unless [200, 401].include?(status)

@@ -14,9 +14,9 @@ module Tuca
 
       if torrents_response?
         if iterate
-          torrents.each { |t| yield register_torrent_if_necessary(t) }
+          torrents.each { |t| yield Tuca::Torrent.new(@connection, t) }
         else
-          block.call(torrents.map { |t| register_torrent_if_necessary(t) })
+          block.call(torrents.map { |t| Tuca::Torrent.new(@connection, t) })
         end
       else
         block.call(@json)
@@ -79,20 +79,12 @@ module Tuca
     end
 
     private
-    def register_torrent_if_necessary(torrent)
-      if @connection.torrents.include?(torrent[:hashString])
-        @connection.torrents[torrent[:hashString]]
-      else
-        @connection.torrents.store(torrent[:hashString], Tuca::Torrent.new(@connection, torrent))
-      end
-    end
-
     def torrents
       @json[:arguments][:torrents] || [@json[:arguments][:'torrent-added']]
     end
 
     def torrents_response?
-      @json && @json.key?(:arguments) && (@json[:arguments].key?(:torrents) || @json[:arguments].key?(:"torrent-added"))
+      @json && @json.key?(:arguments) && (@json[:arguments].key?(:torrents) || @json[:arguments].key?(:'torrent-added'))
     end
 
     def build_json

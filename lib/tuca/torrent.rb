@@ -32,19 +32,15 @@ module Tuca
     }
 
     STATUSES.each do |name|
-      define_method "#{name}?".to_sym do |&block|
-        STATUSES[@fields[:status]] == name
-      end
+      define_method("#{name}?".to_sym) { STATUSES[@fields[:status]] == name }
     end
 
     ATTRIBUTES.each do |name|
-      define_method name.underscore do |&block|
-        @fields[name]
-      end
+      define_method(name.underscore) { @fields[name] }
     end
 
     SETTABLE.each do |name|
-      define_method "#{name.underscore}=".to_sym do |value, &bloc|
+      define_method "#{name.underscore}=".to_sym do |value|
         update_attribute(name, value)
         @fields[name] = value
       end

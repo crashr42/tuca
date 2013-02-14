@@ -1,7 +1,6 @@
 GEM
   remote: http://rubygems.org/
   remote: http://rubygems.org/
-  remote: http://rubygems.org/
   specs:
     ZenTest (4.8.2)
     addressable (2.2.8)
