@@ -79,13 +79,14 @@ module Tuca
 
                   safe_callback_call(:moved, t) unless t.download_dir == wt.download_dir
                   safe_callback_call(:progress, t) unless t.downloaded_ever == wt.downloaded_ever
-                  safe_callback_call(:stopped, t) if status_changed?(0, t, wt)
-                  safe_callback_call(:check_wait, t) if status_changed?(1, t, wt)
-                  safe_callback_call(:checked, t) if status_changed?(2, t, wt)
-                  safe_callback_call(:start_wait, t) if status_changed?(3, t, wt)
-                  safe_callback_call(:started, t) if status_changed?(4, t, wt)
-                  safe_callback_call(:seed_wait, t) if status_changed?(5, t, wt)
-                  safe_callback_call(:seeded, t) if status_changed?(6, t, wt)
+
+                  safe_callback_call(:stopped, t) if status_changed?(:stopped, t, wt)
+                  safe_callback_call(:check_wait, t) if status_changed?(:check_wait, t, wt)
+                  safe_callback_call(:checked, t) if status_changed?(:check, t, wt)
+                  safe_callback_call(:start_wait, t) if status_changed?(:download_wait, t, wt)
+                  safe_callback_call(:started, t) if status_changed?(:download, t, wt)
+                  safe_callback_call(:seed_wait, t) if status_changed?(:seed_wait, t, wt)
+                  safe_callback_call(:seeded, t) if status_changed?(:seeded, t, wt)
 
                   watch_torrents[t.hash_string] = t
                   @torrents.delete(t.hash_string)
@@ -104,7 +105,7 @@ module Tuca
     end
 
     def status_changed?(status_code, one_torrent, two_torrent)
-      one_torrent[:status].to_i == status_code && two_torrent[:status].to_i != status_code
+      one_torrent.status == status_code && two_torrent.status != status_code
     end
 
     def safe_callback_call(cb, *args)
