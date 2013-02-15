@@ -7,4 +7,5 @@ gem 'autotest'
 gem 'em-http-request'
 gem 'em-spec'
 gem 'rake'
+gem 'daemons'
 
