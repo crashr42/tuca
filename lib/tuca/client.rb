@@ -59,46 +59,52 @@ module Tuca
     private
     def activate_callbacks
       return if @callbacks_timer
-      @callbacks_timer = EventMachine::PeriodicTimer.new(1) do
-        get do |response|
-          response.error { |code| safe_callback_call(:error, code) }
-          response.unauthorized { safe_callback_call(:unauthorized) }
+      if @reactor_running
+        @callbacks_timer = EventMachine::PeriodicTimer.new(1) { process_callbacks }
+      else
+        process_callbacks
+      end
+    end
 
-          response.success(false) do |torrents|
-            if @fresh
-              torrents.each do |t|
-                @torrents[t.hash_string] = t
-                safe_callback_call(:exists, t)
-              end
-              @fresh = false
-            else
-              watch_torrents = {}
-              torrents.each do |t|
-                if @torrents.key?(t.hash_string)
-                  wt = @torrents[t.hash_string]
+    def process_callbacks
+      get do |response|
+        response.error { |code| safe_callback_call(:error, code) }
+        response.unauthorized { safe_callback_call(:unauthorized) }
 
-                  safe_callback_call(:moved, t) unless t.download_dir == wt.download_dir
-                  safe_callback_call(:progress, t) unless t.downloaded_ever == wt.downloaded_ever
-
-                  safe_callback_call(:stopped, t) if status_changed?(:stopped, t, wt)
-                  safe_callback_call(:check_wait, t) if status_changed?(:check_wait, t, wt)
-                  safe_callback_call(:checked, t) if status_changed?(:check, t, wt)
-                  safe_callback_call(:start_wait, t) if status_changed?(:download_wait, t, wt)
-                  safe_callback_call(:started, t) if status_changed?(:download, t, wt)
-                  safe_callback_call(:seed_wait, t) if status_changed?(:seed_wait, t, wt)
-                  safe_callback_call(:seeded, t) if status_changed?(:seeded, t, wt)
-
-                  watch_torrents[t.hash_string] = t
-                  @torrents.delete(t.hash_string)
-                else
-                  watch_torrents[t.hash_string] = t
-                  safe_callback_call(:added, t)
-                end
-              end
-              @torrents.each { |_, t| safe_callback_call(:deleted, t) }
-
-              @torrents = watch_torrents
+        response.success(false) do |torrents|
+          if @fresh
+            torrents.each do |t|
+              @torrents[t.hash_string] = t
+              safe_callback_call(:exists, t)
             end
+            @fresh = false
+          else
+            watch_torrents = {}
+            torrents.each do |t|
+              if @torrents.key?(t.hash_string)
+                wt = @torrents[t.hash_string]
+
+                safe_callback_call(:moved, t) unless t.download_dir == wt.download_dir
+                safe_callback_call(:progress, t) unless t.downloaded_ever == wt.downloaded_ever
+
+                safe_callback_call(:stopped, t) if status_changed?(:stopped, t, wt)
+                safe_callback_call(:check_wait, t) if status_changed?(:check_wait, t, wt)
+                safe_callback_call(:checked, t) if status_changed?(:check, t, wt)
+                safe_callback_call(:start_wait, t) if status_changed?(:download_wait, t, wt)
+                safe_callback_call(:started, t) if status_changed?(:download, t, wt)
+                safe_callback_call(:seed_wait, t) if status_changed?(:seed_wait, t, wt)
+                safe_callback_call(:seeded, t) if status_changed?(:seeded, t, wt)
+
+                watch_torrents[t.hash_string] = t
+                @torrents.delete(t.hash_string)
+              else
+                watch_torrents[t.hash_string] = t
+                safe_callback_call(:added, t)
+              end
+            end
+            @torrents.each { |_, t| safe_callback_call(:deleted, t) }
+
+            @torrents = watch_torrents
           end
         end
       end
@@ -126,13 +132,13 @@ module Tuca
 
     def push(body, &block)
       if @block.nil?
-        sync_request(body)
+        sync_request(body, &block)
       else
         async_request(body, &block)
       end
     end
 
-    def sync_request(body)
+    def sync_request(body, &block)
       response = Net::HTTP.start(@options[:uri].host, @options[:uri].port, :use_ssl => @options[:uri].scheme == 'https') do |http|
         request = Net::HTTP::Post.new(@options[:uri].path)
         request.body = body.to_json
@@ -144,11 +150,12 @@ module Tuca
       status = response.code.to_i
       if status == 409
         @options[:session_id] = response.header['x-transmission-session-id']
-        push(body)
+        push(body, &block)
       else
         safe_callback_call(:error, status) unless [200, 401].include?(status)
         safe_callback_call(:unauthorized) if status == 401
-        Tuca::Response.new(self, status, response.body)
+        response = Tuca::Response.new(self, status, response.body)
+        block_given? ? block.call(response) : response
       end
     end
 
@@ -167,13 +174,15 @@ module Tuca
         else
           safe_callback_call(:error, status) unless [200, 401].include?(status)
           safe_callback_call(:unauthorized) if status == 401
-          block.call(Tuca::Response.new(self, status, request.response)) if block_given?
+          response = Tuca::Response.new(self, status, request.response)
+          block_given? ? block.call(response) : response
         end
       end
 
       request.errback do |error|
         safe_callback_call(:error, error)
-        block.call(Tuca::Response.new(self, request.response_header.status, request.response)) if block_given?
+        response = Tuca::Response.new(self, request.response_header.status, request.response)
+        block_given? ? block.call(response) : response
       end
     end
   end
