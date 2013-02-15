@@ -60,7 +60,7 @@ module Tuca
     def activate_callbacks
       return if @callbacks_timer
       @callbacks_timer = EventMachine::PeriodicTimer.new(1) do
-        get(Tuca::Torrent::ATTRIBUTES) do |response|
+        get do |response|
           response.error { |code| safe_callback_call(:error, code) }
           response.unauthorized { safe_callback_call(:unauthorized) }
 

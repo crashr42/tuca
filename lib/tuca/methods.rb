@@ -41,7 +41,7 @@ module Tuca
       push(body, &block)
     end
 
-    def get(fields = Tuca::Torrent::ATTRIBUTES, id = nil, &block)
+    def get(id = nil, fields = Tuca::Torrent::ATTRIBUTES, &block)
       fields = (fields + [:id, :name, :hashString, :status, :downloadedEver]).uniq
       body   = {
           :method    => :'torrent-get',
