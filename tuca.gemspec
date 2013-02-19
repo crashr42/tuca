@@ -14,4 +14,5 @@ Gem::Specification.new do |gem|
   gem.require_paths = %w(lib)
   gem.version       = Tuca::VERSION
   gem.add_dependency('json', '>= 1.7.5')
+  gem.add_dependency('em-http-request', '>= 1.0.2')
 end
