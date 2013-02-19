@@ -9,7 +9,7 @@ Gem::Specification.new do |gem|
 
   gem.files         = `git ls-files`.split($\)
   gem.autorequire   = %q{tuca}
-  gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
+  gem.test_files    = gem.files.grep(%r{^(test|spec|features|examples)/})
   gem.name          = 'tuca'
   gem.require_paths = %w(lib)
   gem.version       = Tuca::VERSION
