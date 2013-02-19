@@ -8,7 +8,7 @@ Gem::Specification.new do |gem|
   gem.homepage      = 'https://github.com/crashr42/tuca'
 
   gem.files         = `git ls-files`.split($\)
-  #gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
+  gem.autorequire   = %q{daemons}
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
   gem.name          = 'tuca'
   gem.require_paths = %w(lib)
