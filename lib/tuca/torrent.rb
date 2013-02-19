@@ -22,13 +22,11 @@ module Tuca
     ]
 
     STATUSES = {
-        0 => :stopped,
-        1 => :check_wait,
-        2 => :check,
-        3 => :download_wait,
-        4 => :download,
-        5 => :seed_wait,
-        6 => :seeded
+        0 => :check_wait,
+        1 => :check,
+        2 => :download,
+        3 => :seed,
+        4 => :seed_wait
     }
 
     STATUSES.each do |name|
