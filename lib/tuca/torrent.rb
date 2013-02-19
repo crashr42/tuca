@@ -108,6 +108,10 @@ module Tuca
       !@fields.key?(:id) || @fields[:id].to_i < 0
     end
 
+    def to_json
+      @fields.to_json
+    end
+
     private
     def update_attribute(key, value)
       @connection.set(@fields[:id], key, value) unless new_torrent?
