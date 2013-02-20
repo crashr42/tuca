@@ -12,14 +12,13 @@ module Tuca
           :username => username,
           :password => password,
           :session_id => nil
-      }
-      @reactor_running = EventMachine.reactor_running?
+      }      
       @fresh = true
       @callbacks = {}
       @block = block
       @torrents = {}
       if block_given?
-        if @reactor_running
+        if EventMachine.reactor_running?
           @block.call(self)
         else
           EventMachine.run { @block.call(self) }
@@ -29,7 +28,7 @@ module Tuca
 
     def disconnect
       clear_callbacks
-      EventMachine.stop_event_loop unless @reactor_running
+      EventMachine.stop_event_loop unless EventMachine.reactor_running?
     end
 
     %w(added deleted moved stopped start_wait started seed_wait seeded exists check_wait checked progress error unauthorized).each do |c|
@@ -59,7 +58,8 @@ module Tuca
     private
     def activate_callbacks
       return if @callbacks_timer
-      if @reactor_running
+      puts "Reactor running: #{EventMachine.reactor_running?}"
+      if EventMachine.reactor_running?
         @callbacks_timer = EventMachine::PeriodicTimer.new(1) { process_callbacks }
       else
         process_callbacks
