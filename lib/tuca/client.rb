@@ -67,7 +67,6 @@ module Tuca
     end
 
     def process_callbacks
-      puts Time.now
       get do |response|
         response.error { |code| safe_callback_call(:error, code) }
         response.unauthorized { safe_callback_call(:unauthorized) }
