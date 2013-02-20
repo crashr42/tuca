@@ -3,8 +3,7 @@ $:.unshift(File.dirname(__FILE__))
 
 require 'tuca'
 
-loop do
-  cl = Tuca::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456'
+Tuca::Client.new 'http://localhost:9091/transmission/rpc', 'transmission', '123456', 2 do |cl|
   cl.get do |r|
     r.success { |result| puts "Status (#{result.id}): #{result.status}" }
     r.error { |code, message| puts "Error (#{code}) #{message} 11" }
@@ -33,6 +32,4 @@ loop do
     r.duplicate { puts 'Torrent duplicate' }
     r.corrupt { puts 'File corrupt!!!' }
   end
-
-  sleep(1)
 end

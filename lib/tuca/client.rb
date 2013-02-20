@@ -5,7 +5,7 @@ module Tuca
 
     attr_reader :torrents
 
-    def initialize(rpc, username, password, &block)
+    def initialize(rpc, username, password, interval = 1, &block)
       @options = {
           :uri => URI.parse(rpc),
           :rpc => rpc,
@@ -17,6 +17,7 @@ module Tuca
       @callbacks = {}
       @block = block
       @torrents = {}
+      @interval = interval || 1
       if block_given?
         if EventMachine.reactor_running?
           @block.call(self)
@@ -58,16 +59,15 @@ module Tuca
     private
     def activate_callbacks
       return if @callbacks_timer
-      puts "Reactor running: #{EventMachine.reactor_running?}"
       if EventMachine.reactor_running?
-        @callbacks_timer = EventMachine::PeriodicTimer.new(1) { process_callbacks }
+        @callbacks_timer = EventMachine::PeriodicTimer.new(@interval) { process_callbacks }
       else
         process_callbacks
       end
     end
 
     def process_callbacks
-      puts "#{Time.now}: Getting torrents ..."
+      puts Time.now
       get do |response|
         response.error { |code| safe_callback_call(:error, code) }
         response.unauthorized { safe_callback_call(:unauthorized) }
